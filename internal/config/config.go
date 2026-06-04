@@ -8,9 +8,12 @@ import (
 )
 
 type Config struct {
-	Ignore []string
+	Ignore  []string
+	matcher *ignoreMatcher
 }
 
+// Load parses the config file as TOML, then compiles the ignore list to
+// ensure the entires are valid and to process them to be optimized when executing ShouldIgnore
 func Load(path string) (*Config, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
@@ -21,9 +24,21 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	m, err := compile(config.Ignore)
+	if err != nil {
+		return nil, err
+	}
+	config.matcher = m
+
 	return &config, nil
 }
 
+// ShouldIgnore uses [path.Match] rules for comparing ignore values against files to see if
+// they should be ignored. If a value is not anchored (does not contain "/"), it is compared
+// against the base of the paths
 func (c *Config) ShouldIgnore(path string, isDir bool) bool {
-	return false
+	if c.matcher == nil {
+		return false
+	}
+	return c.matcher.match(path, isDir)
 }
