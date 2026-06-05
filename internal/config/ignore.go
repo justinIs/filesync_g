@@ -38,7 +38,7 @@ func compile(ignore []string) (*ignoreMatcher, error) {
 		anchored := strings.Contains(glob, "/")
 
 		if _, err := path.Match(glob, ""); err != nil {
-			return nil, fmt.Errorf("config: invalid ignore pattern %q: %w", glob, err)
+			return nil, fmt.Errorf("%w %q: %w", ErrInvalidIgnorePattern, glob, err)
 		}
 
 		patterns = append(patterns, pattern{

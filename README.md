@@ -6,13 +6,6 @@ File sync CLI with TOML config.
 
 Uses file size + mtime gate and hashing to track file changes.
 
-## Build & run
-
-```sh
-go build ./...
-go run ./cmd/filesync    # reads filesync.toml in the working directory
-```
-
 ## Configuration
 
 filesync reads `filesync.toml` from the working directory:

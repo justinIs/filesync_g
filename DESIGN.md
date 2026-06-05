@@ -71,7 +71,7 @@ The key seam is the interface — keep it tiny:
 type FileStore interface {
     Put(ctx context.Context, key string, r io.Reader) error
     Delete(ctx context.Context, key string) error
-    // List(ctx) maybe later, for reconciliation
+    // List(ctx) → size + stored checksum per key, for reconciliation (§4 Verify)
 }
 ```
 
@@ -127,8 +127,9 @@ Per-file logic against the manifest:
 4. Size and mtime both match → **Unchanged**, no hash needed.
 5. In manifest but not in scan → **Deleted** (or skip, if backup-only semantics).
 
-A later `--verify` flag could force a full re-hash to catch the rare
-mtime-preserving edit; leave it out of the PoC.
+A later `--verify` flag has two flavors: a *local* full re-hash (catches the rare
+mtime-preserving edit) and a *remote reconcile* against the backend (see **Verify /
+reconciliation** below). Both are post-PoC.
 
 **State storage — the manifest:**
 
@@ -148,6 +149,54 @@ mtime-preserving edit; leave it out of the PoC.
 - **Write the manifest atomically**: write `state.json.tmp`, then `os.Rename`, so an
   interrupted run can't corrupt state.
 - The manifest is backend-independent — S3/Drive/Git implementations never see it.
+
+**Verify / reconciliation — local vs. remote:**
+
+**Decision: `.filesync/` is never synced.** The manifest stays local; on a remote
+`--verify`, the backend's own listing is the source of truth for "what the store
+has." A remote copy of the manifest would only record what the source *believed* it
+pushed — it lies the moment the store changes out-of-band, which is the exact drift
+verify exists to catch.
+
+Comparison is a **cost ladder** — cheap, definitive checks first, content hashing
+only for the ambiguous remainder:
+
+1. **Size** (from a bulk list) differs → **changed**. Free, definitive.
+2. **Server-stored checksum** present → recompute the same algorithm locally and
+   compare. Reliable, **no download**. The goal tier.
+3. **Download + hash** → only when 1–2 can't decide (or the backend exposes no hash).
+
+Tier 2 depends on what each backend stores:
+
+| Backend | Hashable metadata | No-download compare? |
+|---|---|---|
+| **Git** | blob OID per path | Always — content-addressed; hash the local blob the Git way, compare OIDs |
+| **Google Drive** | `md5Checksum`/`sha1Checksum` + `size`, in one `files.list` | Yes (binary files; Google-native Docs have no hash — special-case) |
+| **S3** | `size`+`ETag` from `ListObjectsV2`; checksum via `HeadObject` | Yes, with the caveats below |
+| **Local/SFTP** | `size`, mtime only | No server hash — hash remotely (`sha256sum` over SSH) or download |
+
+**S3 specifics** (we control uploads, so make verify cheap by construction):
+- **Don't trust ETag as a hash.** Single-part PUT: `ETag == MD5(content)`. **Multipart**:
+  `ETag = MD5(concat of part MD5s) + "-N"` — *not* the object MD5; only matches if you
+  replay the exact part size.
+- **Set an additional checksum on every PUT** (`x-amz-checksum-{crc32c|sha256}`) —
+  stored on the object, returned by `HeadObject`, and multipart-safe (full-object CRC).
+  crc32c is cheap/hardware-accelerated; sha256 for crypto strength. Record the *same*
+  hash in the local manifest at upload time so verify is a metadata-only compare.
+- `ListObjectsV2` returns size+ETag for ~1000 keys/call but **not** checksums or
+  `x-amz-meta-*` — those need one `HeadObject` per key. List to gate on size, Head only
+  the survivors.
+
+**Cross-cutting cautions:**
+- **mtime doesn't cross backends.** S3 `LastModified` / Drive `modifiedTime` are server
+  write times, not the local file's mtime — never compare for equality; at most a coarse
+  newer/older signal.
+- **Pick one checksum algorithm per backend** and store it consistently — the manifest's
+  `hash` must match the algorithm the backend reports, or tier 2 is unusable.
+
+This is why the manifest still records `hash` even though it's never uploaded, and why
+`FileStore` needs a `List`/`Stat` returning **size + stored checksum** per key — the
+reconciliation seam noted in §2.
 
 ---
 
