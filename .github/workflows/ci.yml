@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to the gofumpt version Mason installed for Neovim (LazyVim lang.go
+  # extra formats Go on save with goimports -> gofumpt). Pinning here means CI's
+  # format check can never disagree with your editor's format-on-save.
+  # Keep in sync with scripts/check.sh.
+  GOFUMPT_VERSION: v0.10.0
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race detector)
+        run: go test -race -shuffle=on ./...
+
+      - name: Format check
+        run: |
+          unformatted="$(
+            go run golang.org/x/tools/cmd/goimports@latest -l .
+            go run mvdan.cc/gofumpt@${GOFUMPT_VERSION} -l .
+          )"
+          if [ -n "$(printf '%s' "$unformatted" | tr -d '[:space:]')" ]; then
+            echo "::error::Files are not formatted. Run: scripts/check.sh --fix"
+            printf '%s\n' "$unformatted" | sort -u
+            exit 1
+          fi
+          echo "Formatting OK."

@@ -124,13 +124,15 @@ func Test_match_ValidIgnorePatterns(t *testing.T) {
 			path:     "a.tmp",
 			isDir:    false,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "glob matches at depth",
 			patterns: []string{"*.tmp"},
 			path:     "src/deep/a.tmp",
 			isDir:    false,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "glob non-match",
 			patterns: []string{"*.tmp"},
 			path:     "a.txt",
@@ -145,16 +147,18 @@ func Test_match_ValidIgnorePatterns(t *testing.T) {
 			path:     "node_modules",
 			isDir:    true,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "dir rule ignores file of same name",
 			patterns: []string{"node_modules/"},
 			path:     "node_modules",
 			isDir:    false,
 			want:     false,
-		}, {
+		},
+		{
 			name:     "dir rule matches at depth",
 			patterns: []string{"node_modules/"},
-			path:     "src/node_modules",
+			path:     "src/dist/node_modules",
 			isDir:    true,
 			want:     true,
 		},
@@ -166,13 +170,15 @@ func Test_match_ValidIgnorePatterns(t *testing.T) {
 			path:     "build/cache",
 			isDir:    true,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "anchored does not float to subdirs",
 			patterns: []string{"build/cache"},
 			path:     "x/build/cache",
 			isDir:    true,
 			want:     false,
-		}, {
+		},
+		{
 			name:     "anchored does not match children",
 			patterns: []string{"build/cache"},
 			path:     "build/cache/file.go",
@@ -180,14 +186,15 @@ func Test_match_ValidIgnorePatterns(t *testing.T) {
 			want:     false, // pruning under a matched dir is scan's SkipDir job, not match's
 		},
 
-		// Bare name is the level-2 substitute for "**/name".
+		// Bare name can substitute for "**/name".
 		{
 			name:     "bare name matches at any depth",
 			patterns: []string{"secrets.json"},
 			path:     "a/b/secrets.json",
 			isDir:    false,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "bare name is a full-segment match",
 			patterns: []string{"secrets.json"},
 			path:     "a/secrets.json.bak",
@@ -202,13 +209,15 @@ func Test_match_ValidIgnorePatterns(t *testing.T) {
 			path:     "a.log",
 			isDir:    false,
 			want:     true,
-		}, {
+		},
+		{
 			name:     "no pattern matches",
 			patterns: []string{"*.tmp", "*.log"},
 			path:     "a.txt",
 			isDir:    false,
 			want:     false,
-		}, {
+		},
+		{
 			name:     "empty matcher ignores nothing",
 			patterns: []string{},
 			path:     "anything",
