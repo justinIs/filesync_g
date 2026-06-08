@@ -8,6 +8,7 @@ import (
 
 	"github.com/justinIs/filesync_g/internal/config"
 	"github.com/justinIs/filesync_g/internal/scan"
+	"github.com/justinIs/filesync_g/internal/track"
 )
 
 func main() {
@@ -39,7 +40,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	manifest, err := track.LoadManifest(source)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "manifest: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Printf("Found entries: %+v\n", entries)
+
+	results, err := manifest.CheckEntries(entries)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error checking entries: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("checked entries: %+v\n", results)
 }
 
 func resolveSource(source string) (string, error) {

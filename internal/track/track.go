@@ -2,9 +2,12 @@
 package track
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,7 +76,21 @@ func LoadManifest(source string) (*Manifest, error) {
 	return m, nil
 }
 
-func (m *Manifest) Commit(fi ManifestFileInfo) error {
+func (m *Manifest) AddFile(relPath string) error {
+	info, err := os.Stat(filepath.Join(m.source, relPath))
+	if err != nil {
+		return err
+	}
+	hash, err := m.generateHash(relPath)
+	if err != nil {
+		return err
+	}
+	fi := ManifestFileInfo{
+		RelPath: relPath,
+		Size:    info.Size(),
+		ModTime: info.ModTime(),
+		Hash:    hash,
+	}
 	m.files[fi.RelPath] = fi
 	return m.save()
 }
@@ -127,49 +144,97 @@ func (m *Manifest) save() (err error) {
 	return nil
 }
 
-func (m *Manifest) generateHash(path string) string {
-	return ""
+func (m *Manifest) generateHash(relPath string) (string, error) {
+	path := filepath.Join(m.source, relPath)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("generateHash %s: %w", path, err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// hashEntry hashes the file and classifies failures: a missing or unreadable
+// file is a skip (warn and continue), anything else is fatal
+func (m *Manifest) hashEntry(relPath string) (hash string, skip bool, err error) {
+	hash, err = m.generateHash(relPath)
+	switch {
+	case errors.Is(err, os.ErrNotExist), errors.Is(err, os.ErrPermission):
+		fmt.Fprintf(os.Stderr, "track: skipping %s: %v\n", relPath, err)
+		return "", true, nil
+	case err != nil:
+		return "", false, err
+	default:
+		return hash, false, nil
+	}
 }
 
 type CheckEntriesResult struct {
-	Updates []ManifestFileInfo
-	Deletes []ManifestFileInfo
+	Updates   []ManifestFileInfo
+	Deletes   []ManifestFileInfo
+	Refreshes []ManifestFileInfo
 }
 
-func (m *Manifest) CheckEntries(entries []scan.Entry) CheckEntriesResult {
+func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error) {
 	result := CheckEntriesResult{}
-	// TODO: check for files to delete
+
+	seen := make(map[string]struct{}, len(entries))
 
 	for _, e := range entries {
-		manifest, ok := m.files[e.RelPath]
+		fi, ok := m.files[e.RelPath]
 
-		if !ok {
-			result.Updates = append(result.Updates, ManifestFileInfo{
-				RelPath: e.RelPath,
-				Size:    e.Size,
-				ModTime: e.ModTime,
-				Hash:    m.generateHash(e.RelPath),
-			})
-			continue
-		}
+		seen[e.RelPath] = struct{}{}
 
-		if manifest.Size == e.Size && e.ModTime.Equal(manifest.ModTime) {
+		if ok && fi.Size == e.Size && fi.ModTime.Equal(e.ModTime) {
 			// files match
 			continue
 		}
 
-		newHash := m.generateHash(e.RelPath)
-		if newHash != manifest.Hash {
-			result.Updates = append(result.Updates, ManifestFileInfo{
+		hash, skip, err := m.hashEntry(e.RelPath)
+		if err != nil {
+			return CheckEntriesResult{}, err
+		}
+
+		if skip {
+			// skip due to non-critical error from hashEntry
+			continue
+		}
+
+		if ok && hash == fi.Hash {
+			result.Refreshes = append(result.Refreshes, ManifestFileInfo{
 				RelPath: e.RelPath,
 				Size:    e.Size,
 				ModTime: e.ModTime,
-				Hash:    newHash,
+				Hash:    hash,
 			})
-		} else {
-			// update metadata since hash is the same
+			continue
 		}
+
+		result.Updates = append(result.Updates, ManifestFileInfo{
+			RelPath: e.RelPath,
+			Size:    e.Size,
+			ModTime: e.ModTime,
+			Hash:    hash,
+		})
 	}
 
-	return result
+	for relPath, fi := range m.files {
+		if _, ok := seen[relPath]; !ok {
+			result.Deletes = append(result.Deletes, fi)
+		}
+	}
+	sort.Slice(result.Deletes, func(i, j int) bool {
+		return result.Deletes[i].RelPath < result.Deletes[j].RelPath
+	})
+
+	return result, nil
 }
