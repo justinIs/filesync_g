@@ -13,48 +13,53 @@ import (
 
 func main() {
 	var source string
+	var verbose bool
 	flag.StringVar(&source, "source", config.DefaultSource, "directory to sync (defaults to the current directory)")
+	flag.BoolVar(&verbose, "v", false, "print per-file scan and change tables")
 	flag.Parse()
-
-	fmt.Println("Running filesync")
 
 	source, err := resolveSource(source)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "filesync: %v\n", err)
-		os.Exit(1)
+		fatalf("%v", err)
 	}
 
-	fmt.Printf("Loading config file for source: %v\n", source)
+	fmt.Printf("filesync: scanning %s\n", source)
 
 	cfg, err := config.Load(source)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "filesync: %v\n", err)
-		os.Exit(1)
+		fatalf("%v", err)
 	}
-
-	fmt.Printf("Config file loaded: %+v\n", cfg)
+	if verbose {
+		printConfig(os.Stdout, cfg)
+	}
 
 	entries, err := scan.Scan(source, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "filesync: %v\n", err)
-		os.Exit(1)
+		fatalf("%v", err)
 	}
 
 	manifest, err := track.LoadManifest(source)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "manifest: %v\n", err)
-		os.Exit(1)
+		fatalf("manifest: %v", err)
 	}
-
-	fmt.Printf("Found entries: %+v\n", entries)
 
 	results, err := manifest.CheckEntries(entries)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error checking entries: %v\n", err)
-		os.Exit(1)
+		fatalf("error checking entries: %v", err)
 	}
 
-	fmt.Printf("checked entries: %+v\n", results)
+	if verbose {
+		printEntries(os.Stdout, entries)
+		printResults(os.Stdout, results)
+	} else {
+		printSummary(os.Stdout, len(entries), results)
+	}
+}
+
+// fatalf prints a prefixed error to stderr and exits non-zero.
+func fatalf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "filesync: "+format+"\n", args...)
+	os.Exit(1)
 }
 
 func resolveSource(source string) (string, error) {

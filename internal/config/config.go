@@ -62,6 +62,11 @@ func Load(source string) (*Config, error) {
 	return &config, nil
 }
 
+// String renders the config for display, omitting the internal matcher.
+func (c *Config) String() string {
+	return fmt.Sprintf("Config{ignore: %v}", c.Ignore)
+}
+
 // ShouldIgnore uses [path.Match] rules for comparing ignore values against files to see if
 // they should be ignored. If a value is not anchored (does not contain "/"), it is compared
 // against the base of the paths
