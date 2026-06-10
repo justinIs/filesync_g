@@ -76,6 +76,75 @@ func LoadManifest(source string) (*Manifest, error) {
 	return m, nil
 }
 
+type CheckEntriesResult struct {
+	Updates        []ManifestFileInfo
+	Deletes        []ManifestFileInfo
+	Refreshes      []ManifestFileInfo
+	ExistingCount  int
+	UntouchedCount int
+}
+
+func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error) {
+	result := CheckEntriesResult{
+		ExistingCount:  len(m.files),
+		UntouchedCount: 0,
+	}
+
+	seen := make(map[string]struct{}, len(entries))
+
+	for _, e := range entries {
+		fi, ok := m.files[e.RelPath]
+
+		seen[e.RelPath] = struct{}{}
+
+		if ok && fi.Size == e.Size && fi.ModTime.Equal(e.ModTime) {
+			// files match
+			result.UntouchedCount++
+			continue
+		}
+
+		hash, skip, err := m.hashEntry(e.RelPath)
+		if err != nil {
+			return CheckEntriesResult{}, err
+		}
+
+		if skip {
+			// skip due to non-critical error from hashEntry
+			result.UntouchedCount++
+			continue
+		}
+
+		if ok && hash == fi.Hash {
+			result.Refreshes = append(result.Refreshes, ManifestFileInfo{
+				RelPath: e.RelPath,
+				Size:    e.Size,
+				ModTime: e.ModTime,
+				Hash:    hash,
+			})
+			continue
+		}
+
+		result.Updates = append(result.Updates, ManifestFileInfo{
+			RelPath: e.RelPath,
+			Size:    e.Size,
+			ModTime: e.ModTime,
+			Hash:    hash,
+		})
+	}
+
+	for relPath, fi := range m.files {
+		if _, ok := seen[relPath]; !ok {
+			result.Deletes = append(result.Deletes, fi)
+		}
+	}
+	sort.Slice(result.Deletes, func(i, j int) bool {
+		return result.Deletes[i].RelPath < result.Deletes[j].RelPath
+	})
+
+	return result, nil
+}
+
+// AddFile adds a single file to the manifest and saves to disk
 func (m *Manifest) AddFile(relPath string) error {
 	info, err := os.Stat(filepath.Join(m.source, relPath))
 	if err != nil {
@@ -93,6 +162,21 @@ func (m *Manifest) AddFile(relPath string) error {
 	}
 	m.files[fi.RelPath] = fi
 	return m.save()
+}
+
+func (m *Manifest) applySyncOutcomes(ocs ...SyncOutcome) {
+	for _, oc := range ocs {
+		if oc.Err != nil {
+			continue
+		}
+
+		switch oc.Op {
+		case OpKindUpdate, OpKindRefresh:
+			m.files[oc.Info.RelPath] = oc.Info
+		case OpKindDelete:
+			delete(m.files, oc.Info.RelPath)
+		}
+	}
 }
 
 func (m *Manifest) save() (err error) {
@@ -176,65 +260,4 @@ func (m *Manifest) hashEntry(relPath string) (hash string, skip bool, err error)
 	default:
 		return hash, false, nil
 	}
-}
-
-type CheckEntriesResult struct {
-	Updates   []ManifestFileInfo
-	Deletes   []ManifestFileInfo
-	Refreshes []ManifestFileInfo
-}
-
-func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error) {
-	result := CheckEntriesResult{}
-
-	seen := make(map[string]struct{}, len(entries))
-
-	for _, e := range entries {
-		fi, ok := m.files[e.RelPath]
-
-		seen[e.RelPath] = struct{}{}
-
-		if ok && fi.Size == e.Size && fi.ModTime.Equal(e.ModTime) {
-			// files match
-			continue
-		}
-
-		hash, skip, err := m.hashEntry(e.RelPath)
-		if err != nil {
-			return CheckEntriesResult{}, err
-		}
-
-		if skip {
-			// skip due to non-critical error from hashEntry
-			continue
-		}
-
-		if ok && hash == fi.Hash {
-			result.Refreshes = append(result.Refreshes, ManifestFileInfo{
-				RelPath: e.RelPath,
-				Size:    e.Size,
-				ModTime: e.ModTime,
-				Hash:    hash,
-			})
-			continue
-		}
-
-		result.Updates = append(result.Updates, ManifestFileInfo{
-			RelPath: e.RelPath,
-			Size:    e.Size,
-			ModTime: e.ModTime,
-			Hash:    hash,
-		})
-	}
-
-	for relPath, fi := range m.files {
-		if _, ok := seen[relPath]; !ok {
-			result.Deletes = append(result.Deletes, fi)
-		}
-	}
-	sort.Slice(result.Deletes, func(i, j int) bool {
-		return result.Deletes[i].RelPath < result.Deletes[j].RelPath
-	})
-
-	return result, nil
 }

@@ -85,7 +85,11 @@ func printResults(out io.Writer, r track.CheckEntriesResult) {
 	writeChangeRows(w, "update", r.Updates)
 	writeChangeRows(w, "refresh", r.Refreshes)
 	writeChangeRows(w, "delete", r.Deletes)
+
 	if err := w.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "printResults: error formatting: %v", err)
+	}
+	if _, err := fmt.Fprintf(out, "existing: %d\nuntouched: %d\n", r.ExistingCount, r.UntouchedCount); err != nil {
 		fmt.Fprintf(os.Stderr, "printResults: error formatting: %v", err)
 	}
 }

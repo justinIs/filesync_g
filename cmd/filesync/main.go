@@ -54,6 +54,38 @@ func main() {
 	} else {
 		printSummary(os.Stdout, len(entries), results)
 	}
+
+	committer := track.NewCommitter(manifest)
+	for _, r := range results.Refreshes {
+		committer.Send(track.SyncOutcome{
+			Info: track.ManifestFileInfo{
+				RelPath: r.RelPath,
+				Size:    r.Size,
+				ModTime: r.ModTime,
+				Hash:    r.Hash,
+			},
+			Op: track.OpKindRefresh,
+		})
+	}
+
+	for _, u := range results.Updates {
+		// TODO: upload
+		committer.Send(track.SyncOutcome{
+			Info: track.ManifestFileInfo{
+				RelPath: u.RelPath,
+				Size:    u.Size,
+				ModTime: u.ModTime,
+				Hash:    u.Hash,
+			},
+			Op: track.OpKindUpdate,
+		})
+	}
+
+	if err := committer.Close(); err != nil {
+		fatalf("error committing syncs: %v", err)
+	} else {
+		fmt.Println("Successfully synced files")
+	}
 }
 
 // fatalf prints a prefixed error to stderr and exits non-zero.
