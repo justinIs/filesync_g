@@ -4,8 +4,6 @@
 
 File sync CLI with TOML config.
 
-Uses file size + mtime gate and hashing to track file changes.
-
 ## Configuration
 
 filesync reads `filesync.toml` from the working directory:
@@ -24,7 +22,7 @@ ignore = [
 | -------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
 | `ignore` | `[]string` | `[]`    | Glob patterns to skip ([`path.Match`][match]); `/` anchors to root, trailing `/` = dirs only. |
 
-## Remote store (S3)
+### Remote store (S3)
 
 The `[store]` table points filesync at the S3 bucket it syncs to:
 
@@ -36,53 +34,12 @@ prefix  = "backups/"           # optional — key namespace within the bucket
 profile = "filesync"           # optional — named AWS profile to use
 ```
 
-| Field     | Type     | Default | Description                                                                       |
-| --------- | -------- | ------- | --------------------------------------------------------------------------------- |
-| `bucket`  | `string` | —       | **Required.** Destination S3 bucket.                                              |
-| `region`  | `string` | `""`    | AWS region of the bucket. If empty, resolved from the environment/profile.        |
-| `prefix`  | `string` | `""`    | Key prefix prepended to every object, so files land under one "folder".           |
-| `profile` | `string` | `""`    | Named AWS profile to load credentials from. If empty, uses the default chain.     |
-
-### Credentials
-
-filesync **never** reads AWS credentials from `filesync.toml` — keep that file in your
-repo, keep secrets out of it. Credentials come from the standard AWS chain (environment
-variables, `~/.aws/credentials`, SSO, or an instance/role), so anything the AWS CLI can
-use, filesync can use.
-
-### One-time AWS setup (IAM user + access keys)
-
-1. **Create the bucket** (or use an existing one), noting its name and region.
-
-2. **Create a least-privilege policy** scoped to your bucket/prefix. Replace
-   `MY-BUCKET` and `MY-PREFIX/` (drop `MY-PREFIX/` to allow the whole bucket):
-
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Sid": "FilesyncWrite",
-         "Effect": "Allow",
-         "Action": ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
-         "Resource": "arn:aws:s3:::MY-BUCKET/MY-PREFIX/*"
-       }
-     ]
-   }
-   ```
-
-   `AbortMultipartUpload` lets the SDK clean up if a large, multipart upload fails.
-
-3. **Create an IAM user**, attach the policy, and generate an access key
-   (Security credentials → Create access key → "Command Line Interface").
-
-4. **Configure a profile** so the key lives in `~/.aws/`, not in the repo:
-
-   ```sh
-   aws configure --profile filesync   # enter the access key, secret, and region
-   ```
-
-   Then set `profile = "filesync"` in `[store]` (or export `AWS_PROFILE=filesync`).
+| Field     | Type     | Default | Description                                                                   |
+| --------- | -------- | ------- | ----------------------------------------------------------------------------- |
+| `bucket`  | `string` | —       | **Required.** Destination S3 bucket.                                          |
+| `region`  | `string` | `""`    | AWS region of the bucket. If empty, resolved from the environment/profile.    |
+| `prefix`  | `string` | `""`    | Key prefix prepended to every object, so files land under one "folder".       |
+| `profile` | `string` | `""`    | Named AWS profile to load credentials from. If empty, uses the default chain. |
 
 ## Development
 

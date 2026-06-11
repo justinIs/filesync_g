@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"syscall"
 
 	"github.com/justinIs/filesync_g/internal/config"
-	"github.com/justinIs/filesync_g/internal/scan"
-	"github.com/justinIs/filesync_g/internal/store"
-	"github.com/justinIs/filesync_g/internal/track"
+	"github.com/justinIs/filesync_g/internal/sync"
 )
 
 func main() {
@@ -20,105 +20,14 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "print per-file scan and change tables")
 	flag.Parse()
 
-	source, err := resolveSource(source)
-	if err != nil {
-		fatalf("%v", err)
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	fmt.Printf("filesync: scanning %s\n", source)
-
-	cfg, err := config.Load(source)
-	if err != nil {
-		fatalf("%v", err)
-	}
-	if verbose {
-		printConfig(os.Stdout, cfg)
-	}
-
-	entries, err := scan.Scan(source, cfg)
-	if err != nil {
-		fatalf("%v", err)
-	}
-
-	manifest, err := track.LoadManifest(source)
-	if err != nil {
-		fatalf("manifest: %v", err)
-	}
-
-	results, err := manifest.CheckEntries(entries)
-	if err != nil {
-		fatalf("error checking entries: %v", err)
-	}
-
-	if verbose {
-		printEntries(os.Stdout, entries)
-		printResults(os.Stdout, results)
-	} else {
-		printSummary(os.Stdout, len(entries), results)
-	}
-
-	committer := track.NewCommitter(manifest)
-
-	fileStore, err := store.NewS3FileStore(context.Background(), store.S3FileStoreConfig(cfg.Store))
-	if err != nil {
-		fatalf("error creating fileStore: %v", err)
-	}
-
-	for _, r := range results.Refreshes {
-		committer.Send(track.SyncOutcome{
-			Info: track.ManifestFileInfo{
-				RelPath: r.RelPath,
-				Size:    r.Size,
-				ModTime: r.ModTime,
-				Hash:    r.Hash,
-			},
-			Op: track.OpKindRefresh,
-		})
-	}
-
-	for _, u := range results.Updates {
-		f, err := os.Open(filepath.Join(source, u.RelPath))
-		if err != nil {
-			fatalf("could not open file for upload %s: %v", u.RelPath, err)
+	if err := sync.Run(ctx, source, verbose); err != nil {
+		if errors.Is(err, context.Canceled) {
+			os.Exit(130) // interrupted
 		}
-		if err := fileStore.Put(context.Background(), u.RelPath, f); err != nil {
-			fatalf("error uploading file %s: %v", u.RelPath, err)
-		}
-		committer.Send(track.SyncOutcome{
-			Info: track.ManifestFileInfo{
-				RelPath: u.RelPath,
-				Size:    u.Size,
-				ModTime: u.ModTime,
-				Hash:    u.Hash,
-			},
-			Op: track.OpKindUpdate,
-		})
+		fmt.Fprintf(os.Stderr, "filesync: error running: %v", err)
+		os.Exit(1)
 	}
-
-	if err := committer.Close(); err != nil {
-		fatalf("error committing syncs: %v", err)
-	} else {
-		fmt.Println("Successfully synced files")
-	}
-}
-
-// fatalf prints a prefixed error to stderr and exits non-zero.
-func fatalf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "filesync: "+format+"\n", args...)
-	os.Exit(1)
-}
-
-func resolveSource(source string) (string, error) {
-	abs, err := filepath.Abs(source)
-	if err != nil {
-		return "", fmt.Errorf("resolve source: %v", err)
-	}
-	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-		if err != nil {
-			return "", fmt.Errorf("source %q: %w", abs, err)
-		} else {
-			return "", fmt.Errorf("source %q is not a directory", abs)
-		}
-	}
-	return abs, nil
 }

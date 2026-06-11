@@ -16,7 +16,6 @@ const (
 type SyncOutcome struct {
 	Info ManifestFileInfo
 	Op   OpKind
-	Err  error
 }
 
 type Committer struct {

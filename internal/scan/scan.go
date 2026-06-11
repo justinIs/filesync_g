@@ -2,6 +2,7 @@
 package scan
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,15 +20,18 @@ type Ignorer interface {
 	ShouldIgnore(relPath string, isDir bool) bool
 }
 
-func Scan(root string, ig Ignorer) ([]Entry, error) {
+func Scan(ctx context.Context, root string, ig Ignorer) ([]Entry, error) {
 	var entries []Entry
 	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err != nil {
 			if path == root {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "scan#Scan#WalkDir error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scan WalkDir error: %v\n", err)
 			return nil
 		}
 

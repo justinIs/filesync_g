@@ -79,7 +79,7 @@ func standardIgnorer() fakeIgnorer {
 func TestScan_CollectsKeptFilesWithForwardSlashes(t *testing.T) {
 	root := buildTree(t)
 
-	entries, err := Scan(root, standardIgnorer())
+	entries, err := Scan(t.Context(), root, standardIgnorer())
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestScan_CollectsKeptFilesWithForwardSlashes(t *testing.T) {
 func TestScan_IgnoresFileButKeepsSiblings(t *testing.T) {
 	root := buildTree(t)
 
-	entries, err := Scan(root, standardIgnorer())
+	entries, err := Scan(t.Context(), root, standardIgnorer())
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestScan_IgnoresFileButKeepsSiblings(t *testing.T) {
 func TestScan_PrunesIgnoredDirectorySubtree(t *testing.T) {
 	root := buildTree(t)
 
-	entries, err := Scan(root, standardIgnorer())
+	entries, err := Scan(t.Context(), root, standardIgnorer())
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestScan_PrunesIgnoredDirectorySubtree(t *testing.T) {
 func TestScan_DoesNotRecordDirectories(t *testing.T) {
 	root := buildTree(t)
 
-	entries, err := Scan(root, standardIgnorer())
+	entries, err := Scan(t.Context(), root, standardIgnorer())
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestScan_DoesNotRecordDirectories(t *testing.T) {
 func TestScan_RootNotRecorded(t *testing.T) {
 	root := buildTree(t)
 
-	entries, err := Scan(root, standardIgnorer())
+	entries, err := Scan(t.Context(), root, standardIgnorer())
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestScan_ReportsFileSize(t *testing.T) {
 	const content = "hello" // 5 bytes
 	writeFile(t, root, "a.txt", content)
 
-	entries, err := Scan(root, fakeIgnorer{})
+	entries, err := Scan(t.Context(), root, fakeIgnorer{})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestScan_ReportsFileSize(t *testing.T) {
 func TestScan_EmptyDirectoryReturnsNoEntries(t *testing.T) {
 	root := t.TempDir()
 
-	entries, err := Scan(root, fakeIgnorer{})
+	entries, err := Scan(t.Context(), root, fakeIgnorer{})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestScan_EmptyDirectoryReturnsNoEntries(t *testing.T) {
 func TestScan_NonexistentRootReturnsError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
 
-	_, err := Scan(missing, fakeIgnorer{})
+	_, err := Scan(t.Context(), missing, fakeIgnorer{})
 	if err == nil {
 		t.Fatal("expected an error scanning a nonexistent root, got nil")
 	}

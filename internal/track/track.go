@@ -2,6 +2,7 @@
 package track
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -84,7 +85,7 @@ type CheckEntriesResult struct {
 	UntouchedCount int
 }
 
-func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error) {
+func (m *Manifest) CheckEntries(ctx context.Context, entries []scan.Entry) (CheckEntriesResult, error) {
 	result := CheckEntriesResult{
 		ExistingCount:  len(m.files),
 		UntouchedCount: 0,
@@ -93,6 +94,7 @@ func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error
 	seen := make(map[string]struct{}, len(entries))
 
 	for _, e := range entries {
+
 		fi, ok := m.files[e.RelPath]
 
 		seen[e.RelPath] = struct{}{}
@@ -103,7 +105,7 @@ func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error
 			continue
 		}
 
-		hash, skip, err := m.hashEntry(e.RelPath)
+		hash, skip, err := m.hashEntry(ctx, e.RelPath)
 		if err != nil {
 			return CheckEntriesResult{}, err
 		}
@@ -145,12 +147,12 @@ func (m *Manifest) CheckEntries(entries []scan.Entry) (CheckEntriesResult, error
 }
 
 // AddFile adds a single file to the manifest and saves to disk
-func (m *Manifest) AddFile(relPath string) error {
+func (m *Manifest) AddFile(ctx context.Context, relPath string) error {
 	info, err := os.Stat(filepath.Join(m.source, relPath))
 	if err != nil {
 		return err
 	}
-	hash, err := m.generateHash(relPath)
+	hash, err := m.generateHash(ctx, relPath)
 	if err != nil {
 		return err
 	}
@@ -166,10 +168,6 @@ func (m *Manifest) AddFile(relPath string) error {
 
 func (m *Manifest) applySyncOutcomes(ocs ...SyncOutcome) {
 	for _, oc := range ocs {
-		if oc.Err != nil {
-			continue
-		}
-
 		switch oc.Op {
 		case OpKindUpdate, OpKindRefresh:
 			m.files[oc.Info.RelPath] = oc.Info
@@ -228,7 +226,19 @@ func (m *Manifest) save() (err error) {
 	return nil
 }
 
-func (m *Manifest) generateHash(relPath string) (string, error) {
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (cr *ctxReader) Read(p []byte) (int, error) {
+	if err := cr.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return cr.r.Read(p)
+}
+
+func (m *Manifest) generateHash(ctx context.Context, relPath string) (string, error) {
 	path := filepath.Join(m.source, relPath)
 
 	f, err := os.Open(path)
@@ -240,7 +250,7 @@ func (m *Manifest) generateHash(relPath string) (string, error) {
 	}()
 
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(h, &ctxReader{ctx: ctx, r: f}); err != nil {
 		return "", fmt.Errorf("generateHash %s: %w", path, err)
 	}
 
@@ -249,8 +259,8 @@ func (m *Manifest) generateHash(relPath string) (string, error) {
 
 // hashEntry hashes the file and classifies failures: a missing or unreadable
 // file is a skip (warn and continue), anything else is fatal
-func (m *Manifest) hashEntry(relPath string) (hash string, skip bool, err error) {
-	hash, err = m.generateHash(relPath)
+func (m *Manifest) hashEntry(ctx context.Context, relPath string) (hash string, skip bool, err error) {
+	hash, err = m.generateHash(ctx, relPath)
 	switch {
 	case errors.Is(err, os.ErrNotExist), errors.Is(err, os.ErrPermission):
 		fmt.Fprintf(os.Stderr, "track: skipping %s: %v\n", relPath, err)

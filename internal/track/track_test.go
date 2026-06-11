@@ -87,7 +87,7 @@ func TestAddFile(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	if err := m.AddFile(name); err != nil {
+	if err := m.AddFile(t.Context(), name); err != nil {
 		t.Fatalf("add file: %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestCheckEntriesNewFile(t *testing.T) {
 	e := writeFileAt(t, source, "a.txt", "hello", timeNew)
 	m := manifestWith(source) // empty state
 
-	res, err := m.CheckEntries([]scan.Entry{e})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{e})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestCheckEntriesUnchanged(t *testing.T) {
 		RelPath: "a.txt", Size: e.Size, ModTime: e.ModTime, Hash: sha256Hex("hello"),
 	})
 
-	res, err := m.CheckEntries([]scan.Entry{e})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{e})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestCheckEntriesUnchangedDifferentZone(t *testing.T) {
 		RelPath: "a.txt", Size: e.Size, ModTime: stateMtime, Hash: sha256Hex("hello"),
 	})
 
-	res, err := m.CheckEntries([]scan.Entry{e})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{e})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestCheckEntriesChangedContent(t *testing.T) {
 		RelPath: "a.txt", Size: 3, ModTime: timeOld, Hash: sha256Hex("old"),
 	})
 
-	res, err := m.CheckEntries([]scan.Entry{e})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{e})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestCheckEntriesTouchOnly(t *testing.T) {
 		RelPath: "a.txt", Size: e.Size, ModTime: timeOld, Hash: sha256Hex(content),
 	})
 
-	res, err := m.CheckEntries([]scan.Entry{e})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{e})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestCheckEntriesDeleted(t *testing.T) {
 		ManifestFileInfo{RelPath: "gone.txt", Size: 5, ModTime: timeOld, Hash: "deadbeef"},
 	)
 
-	res, err := m.CheckEntries([]scan.Entry{present})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{present})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestCheckEntriesSkipMissing(t *testing.T) {
 	ghost := scan.Entry{RelPath: "ghost.txt", Size: 10, ModTime: timeNew} // never written
 	m := manifestWith(source)
 
-	res, err := m.CheckEntries([]scan.Entry{ghost})
+	res, err := m.CheckEntries(t.Context(), []scan.Entry{ghost})
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestCheckEntriesEmptyScanDeletesAll(t *testing.T) {
 		ManifestFileInfo{RelPath: "b.txt", Size: 2, ModTime: timeOld, Hash: "b"},
 	)
 
-	res, err := m.CheckEntries(nil)
+	res, err := m.CheckEntries(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("CheckEntries: %v", err)
 	}

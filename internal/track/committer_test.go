@@ -1,7 +1,6 @@
 package track
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -68,33 +67,6 @@ func TestCommitterAppliesOutcomes(t *testing.T) {
 	}
 	if fi, ok := reloaded.files["keep.txt"]; !ok || !fi.ModTime.Equal(timeOld) {
 		t.Errorf("keep.txt should be untouched: %+v", reloaded.files)
-	}
-}
-
-// TestCommitterSkipsFailedOutcome: an outcome carrying an error must never be
-// applied — the manifest only ever advances for work that actually succeeded.
-func TestCommitterSkipsFailedOutcome(t *testing.T) {
-	source := t.TempDir()
-	m := manifestWith(source)
-
-	c := NewCommitter(m)
-	bad := updOutcome("bad.txt", "x")
-	bad.Err = errors.New("upload failed")
-	c.Send(bad)
-	c.Send(updOutcome("good.txt", "y"))
-	if err := c.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-
-	reloaded, err := LoadManifest(source)
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if _, ok := reloaded.files["bad.txt"]; ok {
-		t.Errorf("failed outcome must not be applied: %+v", reloaded.files)
-	}
-	if _, ok := reloaded.files["good.txt"]; !ok {
-		t.Errorf("good.txt should be applied: %+v", reloaded.files)
 	}
 }
 
