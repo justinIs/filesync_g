@@ -101,7 +101,7 @@ func Run(ctx context.Context, source string, verbose bool) (err error) {
 			break
 		}
 		if err != nil {
-			perror("error uploading file: %w", err)
+			perror("error uploading file: %v", err)
 			return err
 		}
 		fileUploadResults.uploadCount++
