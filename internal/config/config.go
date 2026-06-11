@@ -12,7 +12,15 @@ import (
 
 type Config struct {
 	Ignore  []string
+	Store   Store
 	matcher *ignoreMatcher
+}
+
+type Store struct {
+	Bucket  string
+	Region  string
+	Prefix  string
+	Profile string
 }
 
 const (

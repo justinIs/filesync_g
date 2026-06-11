@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/justinIs/filesync_g/internal/config"
 	"github.com/justinIs/filesync_g/internal/scan"
+	"github.com/justinIs/filesync_g/internal/store"
 	"github.com/justinIs/filesync_g/internal/track"
 )
 
@@ -56,6 +58,12 @@ func main() {
 	}
 
 	committer := track.NewCommitter(manifest)
+
+	fileStore, err := store.NewS3FileStore(context.Background(), store.S3FileStoreConfig(cfg.Store))
+	if err != nil {
+		fatalf("error creating fileStore: %v", err)
+	}
+
 	for _, r := range results.Refreshes {
 		committer.Send(track.SyncOutcome{
 			Info: track.ManifestFileInfo{
@@ -69,7 +77,13 @@ func main() {
 	}
 
 	for _, u := range results.Updates {
-		// TODO: upload
+		f, err := os.Open(filepath.Join(source, u.RelPath))
+		if err != nil {
+			fatalf("could not open file for upload %s: %v", u.RelPath, err)
+		}
+		if err := fileStore.Put(context.Background(), u.RelPath, f); err != nil {
+			fatalf("error uploading file %s: %v", u.RelPath, err)
+		}
 		committer.Send(track.SyncOutcome{
 			Info: track.ManifestFileInfo{
 				RelPath: u.RelPath,
