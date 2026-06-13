@@ -4,6 +4,25 @@
 
 File sync CLI with TOML config.
 
+## Usage
+
+filesync scans `-source` (the current directory by default), diffs it against the
+local manifest in `.filesync/`, and uploads changed files to the configured S3 store.
+
+```sh
+filesync                  # sync the current directory
+filesync -source ~/notes  # sync a specific directory
+filesync -dry-run         # preview changes without uploading or deleting
+filesync -delete          # also remove remote files deleted locally
+```
+
+| Flag       | Default | Description                                                            |
+| ---------- | ------- | ---------------------------------------------------------------------- |
+| `-source`  | `.`     | Directory to sync.                                                     |
+| `-delete`  | `false` | Delete remote files that were removed locally (asks for confirmation). |
+| `-dry-run` | `false` | Show what would be uploaded or deleted without touching the store.     |
+| `-v`       | `false` | Print per-file scan and change tables.                                 |
+
 ## Configuration
 
 filesync reads `filesync.toml` from the working directory:
