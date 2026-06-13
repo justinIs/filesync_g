@@ -17,9 +17,9 @@ import (
 	"github.com/justinIs/filesync_g/internal/track"
 )
 
-func Run(ctx context.Context, source string, verbose bool, deleteFiles bool) (err error) {
+func Run(ctx context.Context, source string, verbose bool, deleteFiles bool, dryRun bool) (err error) {
 	if verbose {
-		fmt.Printf("sync#Run source: %s, deleteFiles: %v", source, deleteFiles)
+		fmt.Printf("sync#Run source: %s, deleteFiles: %v, dryRun: %v\n", source, deleteFiles, dryRun)
 	}
 	source, err = resolveSource(source)
 	if err != nil {
@@ -59,6 +59,11 @@ func Run(ctx context.Context, source string, verbose bool, deleteFiles bool) (er
 		printResults(os.Stdout, results)
 	} else {
 		printSummary(os.Stdout, len(entries), results)
+	}
+
+	if dryRun {
+		fmt.Println("Dry Run: not syncing")
+		return nil
 	}
 
 	// Create the committer to update the manifest (state) for when changes are made
