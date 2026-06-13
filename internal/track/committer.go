@@ -66,8 +66,6 @@ func (c *Committer) run() {
 		if err := c.m.save(); err != nil {
 			c.saveErr = err
 			fmt.Fprintf(os.Stderr, "committer: save failed: %v\n", err)
-		} else {
-			c.saveErr = nil
 		}
 	}
 	close(c.done)

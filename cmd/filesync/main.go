@@ -15,19 +15,20 @@ import (
 
 func main() {
 	var source string
-	var verbose bool
+	var verbose, deleteFiles bool
 	flag.StringVar(&source, "source", config.DefaultSource, "directory to sync (defaults to the current directory)")
 	flag.BoolVar(&verbose, "v", false, "print per-file scan and change tables")
+	flag.BoolVar(&deleteFiles, "delete", false, "delete files in remote storage")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := sync.Run(ctx, source, verbose); err != nil {
+	if err := sync.Run(ctx, source, verbose, deleteFiles); err != nil {
 		if errors.Is(err, context.Canceled) {
 			os.Exit(130) // interrupted
 		}
-		fmt.Fprintf(os.Stderr, "filesync: error running: %v", err)
+		fmt.Fprintf(os.Stderr, "filesync: error running: %v\n", err)
 		os.Exit(1)
 	}
 }
