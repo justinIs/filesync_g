@@ -89,7 +89,7 @@ func printResults(out io.Writer, r track.CheckEntriesResult) {
 	if err := w.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "printResults: error formatting: %v", err)
 	}
-	if _, err := fmt.Fprintf(out, "existing: %d\nuntouched: %d\n", r.ExistingCount, r.UntouchedCount); err != nil {
+	if _, err := fmt.Fprintf(out, "existing: %d\nuntouched: %d\n\n", r.ExistingCount, r.UntouchedCount); err != nil {
 		fmt.Fprintf(os.Stderr, "printResults: error formatting: %v", err)
 	}
 }
@@ -106,7 +106,7 @@ func writeChangeRows(w io.Writer, change string, files []track.ManifestFileInfo)
 
 // printSummary prints a one-line tally of the run.
 func printSummary(out io.Writer, scanned int, r track.CheckEntriesResult) {
-	if _, err := fmt.Fprintf(out, "\nfilesync: %d files scanned — %d updates, %d refreshes, %d deletes\n",
+	if _, err := fmt.Fprintf(out, "\nSummary: %d files scanned — %d updates, %d refreshes, %d deletes\n\n",
 		scanned, len(r.Updates), len(r.Refreshes), len(r.Deletes)); err != nil {
 		fmt.Fprintf(os.Stderr, "printSummary: error formatting: %v", err)
 	}

@@ -95,7 +95,7 @@ func Run(ctx context.Context, source string, verbose bool, deleteFiles bool) (er
 		})
 	}
 
-	if len(results.Updates) == 0 && (!deleteFiles || len(results.Deletes) == 0) {
+	if len(results.Updates) == 0 && len(results.Deletes) == 0 {
 		fmt.Println("No files to sync with backend")
 		return nil
 	}
@@ -132,40 +132,44 @@ func Run(ctx context.Context, source string, verbose bool, deleteFiles bool) (er
 			Op: track.OpKindUpdate,
 		})
 	}
-	if deleteFiles &&
-		len(results.Deletes) > 0 &&
-		confirm(fmt.Sprintf("%d files to delete, are you sure?", len(results.Deletes))) {
-		for _, d := range results.Deletes {
-			if ctx.Err() != nil {
-				break
-			}
-			if err := fileStore.Delete(ctx, d.RelPath); err != nil {
-				if errors.Is(err, context.Canceled) {
+	if len(results.Deletes) > 0 {
+		if !deleteFiles {
+			fmt.Printf("Found %d file(s) to delete, run with -delete to remove from backend\n", len(results.Deletes))
+		} else if confirm(fmt.Sprintf("%d file(s) to delete, are you sure?", len(results.Deletes))) {
+			for _, d := range results.Deletes {
+				if ctx.Err() != nil {
 					break
 				}
-				perror("error deleting file: %v", err)
-				continue
+				if err := fileStore.Delete(ctx, d.RelPath); err != nil {
+					if errors.Is(err, context.Canceled) {
+						break
+					}
+					perror("error deleting file: %v", err)
+					continue
+				}
+				committer.Send(track.SyncOutcome{
+					Info: track.ManifestFileInfo{
+						RelPath: d.RelPath,
+						Size:    d.Size,
+						ModTime: d.ModTime,
+						Hash:    d.Hash,
+					},
+					Op: track.OpKindDelete,
+				})
 			}
-			committer.Send(track.SyncOutcome{
-				Info: track.ManifestFileInfo{
-					RelPath: d.RelPath,
-					Size:    d.Size,
-					ModTime: d.ModTime,
-					Hash:    d.Hash,
-				},
-				Op: track.OpKindDelete,
-			})
 		}
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	fmt.Printf(
-		"scan: file upload results\nuploaded: %d\nfailed: %d\n",
-		fileUploadResults.uploadCount,
-		fileUploadResults.failedCount,
-	)
+	if fileUploadResults.uploadCount > 0 || fileUploadResults.failedCount > 0 {
+		fmt.Printf(
+			"scan: file upload results\nuploaded: %d\nfailed: %d\n",
+			fileUploadResults.uploadCount,
+			fileUploadResults.failedCount,
+		)
+	}
 
 	return nil
 }
